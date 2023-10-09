@@ -4,8 +4,8 @@ from llama_cpp import Llama, LlamaRAMCache, ChatCompletionMessage
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model", type=str, default="models/llama-model.gguf")
-parser.add_argument("--tts", type=str, default="TTS")
-parser.add_argument("--input", type=str, default="input")
+parser.add_argument("--tts", type=str, default="TTS", choices=['TTS', 'gtts', 'dummy'])
+parser.add_argument("--input", type=str, default="whisper", choices=['input', 'whisper'])
 parser.add_argument("--prompt", type=str, default="prompt.txt")
 args = parser.parse_args()
 
