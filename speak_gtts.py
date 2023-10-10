@@ -15,7 +15,8 @@ def loop_audio():
     global audio_q_idle
     while True:
         while audio_queue.empty():
-            audio_q_idle = True
+            if line_queue.empty():
+                audio_q_idle = True
             time.sleep(0.001)
 
         audio_q_idle = False
@@ -29,12 +30,14 @@ def loop_audio():
 
 def loop_speak():
     global line_q_idle
+    global audio_q_idle
     while True:
         while line_queue.empty():
             line_q_idle = True
             time.sleep(0.001)
 
         line_q_idle = False
+        audio_q_idle = False
         line = line_queue.get()
         mp3_fp = BytesIO()
         tts = gTTS(line, lang='en')
