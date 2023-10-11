@@ -1,65 +1,66 @@
 import threading
 from TTS.api import TTS
-import sounddevice as sd
-import pygame
 import time
 import queue
+from multiprocessing import Process, Queue, Value
 
 
-line_queue = queue.Queue()
+line_queue = Queue()
+done_flag = Value('b', False)
 audio_queue = queue.Queue()
-line_q_idle = True
-audio_q_idle = True
 
 # sample rate must match model, tacotron2-DDC: 22050, jenny: 48000
 #sample_rate=22050
 sample_rate=48000
-def loop_audio():
-    global audio_q_idle
+def loop_audio(done_flag):
+    import sounddevice as sd
+    import pygame
+    # the line here is to 'pre-heat' audio in the system, otherwise the first word cannot be heard
+    pygame.mixer.init()
     while True:
         while audio_queue.empty():
-            if line_queue.empty():
-                audio_q_idle = True
             time.sleep(0.001)
 
-        audio_q_idle = False
         clip = audio_queue.get()
 
-        duration = len(clip)/sample_rate
-        sd.play(clip, sample_rate)
-        time.sleep(duration)
+        if clip != []:
+            duration = len(clip)/sample_rate
+            sd.play(clip, sample_rate)
+            time.sleep(duration)
+        else:
+            # when the element in queue is [], means user had finished all TTS
+            # request and waiting for all audio clip finishes
+            done_flag.value = True
 
-def loop_speak():
-    global line_q_idle
-    global audio_q_idle
+def loop_speak(line_queue, done_flag):
+    thread_audio = threading.Thread(target=loop_audio, args=(done_flag,))
+    thread_audio.start()
+
+    #tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC", progress_bar=False, gpu=False)
+    tts = TTS(model_name="tts_models/en/jenny/jenny", progress_bar=False, gpu=False)
+
     while True:
         while line_queue.empty():
-            line_q_idle = True
             time.sleep(0.001)
 
-        line_q_idle = False
-        audio_q_idle = False
         line = line_queue.get()
-        wav = tts.tts(line)
-        audio_queue.put(wav)
+        if line != []:
+            wav = tts.tts(line)
+            audio_queue.put(wav)
+        else:
+            audio_queue.put([])
+
 
 def speak(line):
-    global line_q_idle
-    line_q_idle = False
+    done_flag.value = False
     line_queue.put(line)
 
 def wait():
-    global line_q_idle
-    global audio_q_idle
-    while not line_q_idle or not audio_q_idle:
+    line_queue.put([])
+    # wait until done_flag set to False
+    while done_flag.value == False:
         time.sleep(0.001)
 
-#tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC", progress_bar=False, gpu=False)
-tts = TTS(model_name="tts_models/en/jenny/jenny", progress_bar=False, gpu=False)
-# the line here is to 'pre-heat' audio in the system, otherwise the first word cannot be heard
-pygame.mixer.init()
-thread_speak = threading.Thread(target=loop_speak)
-thread_audio = threading.Thread(target=loop_audio)
-thread_speak.start()
-thread_audio.start()
+p = Process(target=loop_speak, args=(line_queue,done_flag))
+p.start()
 
