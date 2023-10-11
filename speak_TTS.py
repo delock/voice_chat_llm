@@ -6,14 +6,13 @@ from multiprocessing import Process, Queue, Value
 
 omp_threads = 8
 
-line_queue = Queue()
-done_flag = Value('b', False)
-audio_queue = queue.Queue()
-
 # sample rate must match model, tacotron2-DDC: 22050, jenny: 48000
 #sample_rate=22050
 sample_rate=48000
-def loop_audio(done_flag):
+def loop_audio(audio_queue, done_flag):
+    num_cpus = os.cpu_count()
+    os.sched_setaffinity(0, range(num_cpus - omp_threads - 1, num_cpus - omp_threads))
+    print(f'audio loop affinity = {os.sched_getaffinity(0)}')
     import sounddevice as sd
     import pygame
     # the line here is to 'pre-heat' audio in the system, otherwise the first word cannot be heard
@@ -33,12 +32,11 @@ def loop_audio(done_flag):
             # request and waiting for all audio clip finishes
             done_flag.value = True
 
-def loop_speak(line_queue, done_flag):
+def loop_speak(line_queue, audio_queue):
     num_cpus = os.cpu_count()
     os.sched_setaffinity(0, range(num_cpus - omp_threads, num_cpus))
+    print(f'tts loop affinity = {os.sched_getaffinity(0)}')
     from TTS.api import TTS
-    thread_audio = threading.Thread(target=loop_audio, args=(done_flag,))
-    thread_audio.start()
 
     #tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC", progress_bar=False, gpu=False)
     tts = TTS(model_name="tts_models/en/jenny/jenny", progress_bar=False, gpu=False)
@@ -66,6 +64,13 @@ def wait():
         time.sleep(0.001)
 
 os.environ['OMP_NUM_THREADS']=f'{omp_threads}'
-p = Process(target=loop_speak, args=(line_queue,done_flag))
-p.start()
+audio_queue = Queue()
+line_queue = Queue()
+done_flag = Value('b', False)
+
+p_audio = Process(target=loop_audio, args=(audio_queue, done_flag,))
+p_tts = Process(target=loop_speak, args=(line_queue,audio_queue,))
+
+p_audio.start()
+p_tts.start()
 
