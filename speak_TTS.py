@@ -1,9 +1,10 @@
 import threading
-from TTS.api import TTS
+import os
 import time
 import queue
 from multiprocessing import Process, Queue, Value
 
+omp_threads = 8
 
 line_queue = Queue()
 done_flag = Value('b', False)
@@ -33,6 +34,9 @@ def loop_audio(done_flag):
             done_flag.value = True
 
 def loop_speak(line_queue, done_flag):
+    num_cpus = os.cpu_count()
+    os.sched_setaffinity(0, range(num_cpus - omp_threads, num_cpus))
+    from TTS.api import TTS
     thread_audio = threading.Thread(target=loop_audio, args=(done_flag,))
     thread_audio.start()
 
@@ -61,6 +65,7 @@ def wait():
     while done_flag.value == False:
         time.sleep(0.001)
 
+os.environ['OMP_NUM_THREADS']=f'{omp_threads}'
 p = Process(target=loop_speak, args=(line_queue,done_flag))
 p.start()
 
