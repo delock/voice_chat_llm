@@ -7,6 +7,9 @@ parser.add_argument("--model", type=str, default="models/llama-model.gguf")
 parser.add_argument("--tts", type=str, default="TTS", choices=['TTS', 'gtts', 'dummy'])
 parser.add_argument("--input", type=str, default="whisper", choices=['input', 'whisper'])
 parser.add_argument("--prompt", type=str, default="prompt.txt")
+parser.add_argument("--n_threads_llm", type=int, default=6)
+parser.add_argument("--n_threads_tts", type=int, default=8)
+parser.add_argument("--n_context", type=int, default=2048)
 args = parser.parse_args()
 
 if args.tts == "TTS":
@@ -32,7 +35,7 @@ def speak_text(line):
         speak.speak(line)
 
 
-llm = Llama(model_path=args.model, n_threads=6, verbose=False)
+llm = Llama(model_path=args.model, n_threads=args.n_threads_llm, n_ctx=args.n_context, verbose=False)
 #cache = LlamaRAMCache()
 #llm.set_cache(cache)
 file = open(args.prompt, "r")
@@ -41,8 +44,30 @@ prompt_list = [
     ChatCompletionMessage(role='system', content=prompt),
     ChatCompletionMessage(role='user', content="Hello."),
 ]
+
+def estimate_token_count(prompt_list):
+    count = 0
+    for prompt in prompt_list:
+        count += len(prompt['content'].split(' '))
+    return count * 1.5
+
+def trim_prompt_list(prompt_list):
+    count = 0
+    ret_list = []
+    for prompt in prompt_list:
+        if prompt['role'] == 'system':
+            count += len(prompt['content'].split(' '))
+            ret_list.append(prompt)
+        else:
+            count += len(prompt['content'].split(' '))
+            if count*1.5 > args.n_context/2:
+                ret_list.append(prompt)
+    return ret_list
+
 while True:
-    #print (prompt_list)
+    num_tokens = estimate_token_count(prompt_list)
+    if num_tokens > 0.75 * args.n_context:
+        prompt_list = trim_prompt_list(prompt_list)
     stream = llm.create_chat_completion(
         prompt_list,
         max_tokens=4096,

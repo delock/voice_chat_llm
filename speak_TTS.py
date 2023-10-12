@@ -4,11 +4,11 @@ import time
 import queue
 from multiprocessing import Process, Queue, Value
 
-omp_threads = 8
+omp_threads = 7
 
 # sample rate must match model, tacotron2-DDC: 22050, jenny: 48000
-#sample_rate=22050
-sample_rate=48000
+sample_rate=22050
+#sample_rate=48000
 def loop_audio(audio_queue, done_flag):
     num_cpus = os.cpu_count()
     os.sched_setaffinity(0, range(num_cpus - omp_threads - 1, num_cpus - omp_threads))
@@ -38,8 +38,8 @@ def loop_speak(line_queue, audio_queue):
     print(f'tts loop affinity = {os.sched_getaffinity(0)}')
     from TTS.api import TTS
 
-    #tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC", progress_bar=False, gpu=False)
-    tts = TTS(model_name="tts_models/en/jenny/jenny", progress_bar=False, gpu=False)
+    tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC", progress_bar=False, gpu=False)
+    #tts = TTS(model_name="tts_models/en/jenny/jenny", progress_bar=False, gpu=False)
 
     while True:
         while line_queue.empty():
