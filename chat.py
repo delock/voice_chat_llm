@@ -52,6 +52,7 @@ def estimate_token_count(prompt_list):
     return count * 1.5
 
 def trim_prompt_list(prompt_list):
+    roles_dict = {}
     count = 0
     ret_list = []
     for prompt in prompt_list:
@@ -59,9 +60,22 @@ def trim_prompt_list(prompt_list):
             count += len(prompt['content'].split(' '))
             ret_list.append(prompt)
         else:
-            count += len(prompt['content'].split(' '))
-            if count*1.5 > args.n_context/2:
+            if roles_dict.get(prompt['role']) == None:
+                # reserve the first sentence of each role
+                roles_dict[prompt['role']] = True
+                count += len(prompt['content'].split(' '))
                 ret_list.append(prompt)
+            else:
+                count += len(prompt['content'].split(' '))
+                if count*1.5 > args.n_context/2:
+                    ret_list.append(prompt)
+    print ("Trim prompt list")
+    print ("From:")
+    for p in prompt_list:
+        print (f'    {p}')
+    print ("To:")
+    for p in ret_list:
+        print (f'    {p}')
     return ret_list
 
 while True:
@@ -105,3 +119,10 @@ while True:
     prompt_list.append(ChatCompletionMessage(role=role, content=answer))
     prompt = transcribe.transcribe('\nYou: ')
     prompt_list.append(ChatCompletionMessage(role='user', content=prompt))
+    '''
+    # code that start a new session after a while.
+    prompt_list.append(ChatCompletionMessage(role='user', content="byebye."))
+    prompt_list.append(ChatCompletionMessage(role='assistant', content="See you, have a nice day."))
+    prompt_list.append(ChatCompletionMessage(role='system', content="You left the conversation, but several days later, you two met again."))
+    prompt_list.append(ChatCompletionMessage(role='user', content="Hello."))
+    '''
