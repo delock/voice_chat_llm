@@ -106,7 +106,7 @@ while True:
             print(content, end='', flush=True)
             answer = answer + content
             segment = segment + content
-            if content in ['.', '?', '!', '."', '?"', '!"', '\n', ':', ".'", "?'", "!'", '...']:
+            if content in [',', ';', '.', '?', '!', '."', '?"', '!"', '\n', ':', ".'", "?'", "!'", '...']:
                 if content != '.' or not matcher_acronym.match(prev_content):
                     speak_text(segment)
                     # For perf test and debug
