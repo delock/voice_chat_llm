@@ -1,4 +1,5 @@
 import json
+import re
 import argparse
 from llama_cpp import Llama, LlamaRAMCache, ChatCompletionMessage
 
@@ -9,7 +10,8 @@ parser.add_argument("--input", type=str, default="whisper", choices=['input', 'w
 parser.add_argument("--prompt", type=str, default="prompt.txt")
 parser.add_argument("--n_threads_llm", type=int, default=6)
 parser.add_argument("--n_threads_tts", type=int, default=8)
-parser.add_argument("--n_context", type=int, default=2048)
+parser.add_argument("--n_context", type=int, default=4096)
+parser.add_argument("--verbose", action='store_true')
 args = parser.parse_args()
 
 if args.tts == "TTS":
@@ -35,7 +37,7 @@ def speak_text(line):
         speak.speak(line)
 
 
-llm = Llama(model_path=args.model, n_threads=args.n_threads_llm, n_ctx=args.n_context, verbose=False)
+llm = Llama(model_path=args.model, n_threads=args.n_threads_llm, n_ctx=args.n_context, n_gpu_layers=32, verbose=args.verbose)
 #cache = LlamaRAMCache()
 #llm.set_cache(cache)
 file = open(args.prompt, "r")
@@ -45,6 +47,7 @@ prompt_list = [
     ChatCompletionMessage(role='user', content="Hello."),
 ]
 
+matcher_acronym = re.compile(' *[A-Z]')
 def estimate_token_count(prompt_list):
     count = 0
     for prompt in prompt_list:
@@ -56,19 +59,15 @@ def trim_prompt_list(prompt_list):
     count = 0
     ret_list = []
     for prompt in prompt_list:
-        if prompt['role'] == 'system':
+        if roles_dict.get(prompt['role']) == None:
+            # reserve the first sentence of each role
+            roles_dict[prompt['role']] = True
             count += len(prompt['content'].split(' '))
             ret_list.append(prompt)
         else:
-            if roles_dict.get(prompt['role']) == None:
-                # reserve the first sentence of each role
-                roles_dict[prompt['role']] = True
-                count += len(prompt['content'].split(' '))
+            count += len(prompt['content'].split(' '))
+            if count*1.5 > args.n_context/2:
                 ret_list.append(prompt)
-            else:
-                count += len(prompt['content'].split(' '))
-                if count*1.5 > args.n_context/2:
-                    ret_list.append(prompt)
     print ("Trim prompt list")
     print ("From:")
     for p in prompt_list:
@@ -96,6 +95,7 @@ while True:
     role = None
     answer = ""
     segment = ""
+    prev_content = ""
     print('\nTeacher: ', end='')
     for output in stream:
         if 'role' in output["choices"][0]['delta']:
@@ -106,11 +106,14 @@ while True:
             print(content, end='', flush=True)
             answer = answer + content
             segment = segment + content
-            if content in ['.', '?', '!']:
-                speak_text(segment)
-                # For perf test and debug
-                #speak.wait()
-                segment = ""
+            if content in ['.', '?', '!', '."', '?"', '!"', '\n', ':', ".'", "?'", "!'", '...']:
+                if content != '.' or not matcher_acronym.match(prev_content):
+                    speak_text(segment)
+                    # For perf test and debug
+                    #speak.wait()
+                    segment = ""
+            prev_content = content
+        #print ("_", end="")
     if segment != "":
         speak_text(segment)
     speak.wait()

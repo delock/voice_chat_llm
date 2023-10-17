@@ -45,6 +45,7 @@ def loop_speak():
         audio_queue.put(mp3_fp)
 
 def speak(line):
+    print ("$")
     global line_q_idle
     line_q_idle = False
     line_queue.put(line)
